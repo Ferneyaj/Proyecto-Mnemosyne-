@@ -1,0 +1,728 @@
+// ============================================================================
+// PROYECTO: REMANENTE (Mnemosine 3D - Version Fusion Final)
+// DESCRIPCION GENERAL:
+//   Archivo principal del motor del juego en Processing (P3D). Coordina la
+//   inicializacion de recursos multimedia (fuentes, sonidos, videos, modelos 3D,
+//   texturas y sprites 2.5D), el ciclo principal de actualizacion y renderizado
+//   (draw), las transiciones entre niveles y el reinicio de estados globales.
+// ============================================================================
+import processing.sound.Sound;
+import processing.sound.SoundFile;
+// Mnemosine - fusion de nivel 1 texturizado, combate y nivel 2.
+// El mapa se conserva como matriz externa para que el diseno del equipo
+// pueda seguir creciendo sin cambiar la logica del juego.
+
+// --- posicion y movimiento del jugador ---
+// X y Z ubican al jugador dentro de la matriz; Y controla el salto y la gravedad.
+import processing.sound.*;
+
+import org.gamecontrolplus.*;
+import net.java.games.input.*;
+import processing.video.*;
+
+Movie menu;
+Movie cinematicaNivel1;
+Movie cinematicaNivel3;
+boolean reproduciendoCinematicaNivel3 = false;
+int tiempoInicioCinematicaNivel3 = 0;
+boolean reproduciendoCinematica = false;
+int tiempoInicioCinematica = 0;
+int tiempoInicioFadeCinematica = -1;
+final int FADE_CINEMATICA_DURACION = 1600;
+boolean debeReproducirCinematica = true;
+
+int PantallaDeJuego = 0;
+float JugadorX, JugadorY, JugadorZ;
+float CamaraPosX, CamaraPosY, CamaraPosZ, CamaraVisX, CamaraVisY;
+float velocidadBase, velocidadCarrera, velocidad;
+float velocidadY = 0;
+float gravedad = 1.2;
+float fuerzaSalto = -22;
+boolean enElSuelo = true;
+
+boolean corriendo = false;
+float anguloCamara;
+float inclinacionCamara;
+float xPropuesta;
+float zPropuesta;
+float direccionJugadorX = 0;
+float direccionJugadorZ = -1;
+float SIN_PISO = 10000000;
+
+// Ventanas breves que hacen los saltos mas justos en el nivel de plataformas.
+int coyoteHasta = 0;
+int saltoSolicitadoHasta = 0;
+final int DURACION_COYOTE = 6;
+final int DURACION_BUFFER_SALTO = 8;
+
+// --- estado general del nivel 1 y de la matriz del mapa ---
+int nivelActual = 1;
+int TAM_CELDA = 100;
+int RADIO_COLISION = 1;
+int RADIO_DIBUJO = 25;
+int[][] mapa;
+PImage texturaNivel2;
+
+// 0 - W, 1 - S, 2 - A, 3 - D. El arreglo guarda teclas presionadas.
+boolean[] teclas = new boolean[4];
+// 0 - izquierda, 1 - derecha. Se usan para girar la camara con las flechas.
+boolean[] lados = new boolean[2];
+// 0 - arriba, 1 - abajo. Se usan para mirar verticalmente con las flechas.
+boolean[] mirarVertical = new boolean[2];
+
+// --- combate: arreglos paralelos para posicion, vida, velocidad y estado ---
+final int NUM_ENEMIGOS = 9;
+final float ENEMIGO_ANCHO = 80;
+final float ENEMIGO_ALTO = 100;
+
+// Estados del comportamiento para que cada enemigo tenga una ventana clara de ataque.
+final int ENEMIGO_PERSEGUIR = 0;
+final int ENEMIGO_PREPARAR = 1;
+final int ENEMIGO_ATACAR = 2;
+final int ENEMIGO_RECUPERAR = 3;
+final int ENEMIGO_ATURDIDO = 4;
+
+// Tipos de enemigo usados en el nivel 1.
+final int TIPO_PERSEGUIDOR = 0;
+final int TIPO_EMBESTIDOR = 1;
+final int TIPO_TANQUE = 2;
+final int TIPO_TIRADOR = 3;
+final int TIPO_JEFE = 4;
+
+float[] enemigosX = new float[NUM_ENEMIGOS];
+float[] enemigosZ = new float[NUM_ENEMIGOS];
+int[] enemigosVida = new int[NUM_ENEMIGOS];
+int[] enemigosVidaMax = new int[NUM_ENEMIGOS];
+float[] enemigosVelocidad = new float[NUM_ENEMIGOS];
+boolean[] enemigosActivo = new boolean[NUM_ENEMIGOS];
+color[] enemigosColor = new color[NUM_ENEMIGOS];
+int[] enemigosTipo = new int[NUM_ENEMIGOS];
+int[] enemigosEstado = new int[NUM_ENEMIGOS];
+int[] enemigosTimer = new int[NUM_ENEMIGOS];
+boolean[] enemigosAtaqueAplicado = new boolean[NUM_ENEMIGOS];
+float[] enemigosDireccionX = new float[NUM_ENEMIGOS];
+float[] enemigosDireccionZ = new float[NUM_ENEMIGOS];
+float[] enemigosRetrocesoX = new float[NUM_ENEMIGOS];
+float[] enemigosRetrocesoZ = new float[NUM_ENEMIGOS];
+int[] enemigosParpadeoHasta = new int[NUM_ENEMIGOS];
+
+// Proyectiles sencillos usados por los enemigos tiradores.
+final int NUM_PROYECTILES = 24;
+final float VELOCIDAD_PROYECTIL = 26;
+final float RADIO_PROYECTIL = 14;
+float[] proyectilesX = new float[NUM_PROYECTILES];
+float[] proyectilesZ = new float[NUM_PROYECTILES];
+float[] proyectilesY = new float[NUM_PROYECTILES];
+float[] proyectilesDireccionX = new float[NUM_PROYECTILES];
+float[] proyectilesDireccionZ = new float[NUM_PROYECTILES];
+float[] proyectilesDireccionY = new float[NUM_PROYECTILES];
+int[] proyectilesHasta = new int[NUM_PROYECTILES];
+boolean[] proyectilesActivo = new boolean[NUM_PROYECTILES];
+
+// El dano recibido y el ataque usan frameCount como reloj para controlar cooldowns.
+final int VIDAS_INICIALES = 15;
+final int VIDAS_NIVEL3 = 30;
+int vidaJugador = VIDAS_INICIALES;
+int ultimoGolpeRecibido = -1000;
+int cooldownDanioJugador = 60;
+float rangoContactoEnemigo = 135;
+// Cada tipo comienza su ataque dentro de su rango real de impacto.
+final float RANGO_ATAQUE_TIRADOR = 820;
+final float RANGO_DETECCION_EMBESTIDOR = 620;
+final float MULTIPLICADOR_ATAQUE = 1.60;
+final float MULTIPLICADOR_EMBESTIDA = 2.4;
+final float MULTIPLICADOR_ATAQUE_NIVEL3 = 1.15;
+final float MULTIPLICADOR_EMBESTIDA_NIVEL3 = 1.80;
+final int VENTANA_GOLPE_PREPARACION = 8;
+final float VELOCIDAD_GIRO_TANQUE = 0.075;
+final int DURACION_PREPARACION_MELEE = 24;
+final int DURACION_PREPARACION_TIRADOR = 12;
+final int DURACION_ATAQUE_MELEE = 24;
+final int DURACION_ATAQUE_TIRADOR = 14;
+final int DURACION_ATAQUE_EMBESTIDOR = 26;
+final int DURACION_RECUPERACION_MELEE = 32;
+final int DURACION_RECUPERACION_TIRADOR = 18;
+int ultimoAtaqueJugador = -1000;
+int cooldownAtaque = 30;
+float rangoAtaque = 225;
+int ataqueVisibleHasta = 0;
+
+// Esquiva, parry y ataque especial del jugador.
+int ultimoDash = -1000;
+int cooldownDash = 70;
+int dashHasta = 0;
+int duracionDash = 8;
+float velocidadDash = 38;
+boolean dashActivo = false;
+float dashDireccionX;
+float dashDireccionZ;
+int invulnerableHasta = 0;
+int ultimoParry = -1000;
+int cooldownParry = 55;
+int parryHasta = 0;
+int duracionParry = 10;
+int ultimoAtaqueEspecial = -1000;
+int cooldownAtaqueEspecial = 75;
+int ataqueEspecialVisibleHasta = 0;
+float rangoParry = 175;
+float rangoAtaqueEspecial = 330;
+int memoriaActual = 0;
+final int MEMORIA_MAX = 100;
+
+// Pausa breve y movimiento de camara usados para hacer visibles los impactos.
+int hitStopHasta = 0;
+int temblorCamaraHasta = 0;
+float intensidadTemblorCamara = 0;
+
+// --- salida del nivel 1 dentro del mapa ampliado del equipo ---
+// La salida se guarda como fila y columna para que siga dependiendo de la matriz.
+
+final int SALIDA_FILA = 98;
+final int SALIDA_COL = 79;
+
+// --- nivel 2: plataformas definidas por centro X/Z, semiancho y superficie Y ---
+final int NUM_PLATAFORMAS = 38;
+float[] plataformaX = new float[NUM_PLATAFORMAS];
+float[] plataformaZ = new float[NUM_PLATAFORMAS];
+float[] plataformaAnchoX = new float[NUM_PLATAFORMAS];
+float[] plataformaAnchoZ = new float[NUM_PLATAFORMAS];
+float[] plataformaY = new float[NUM_PLATAFORMAS];
+boolean[] esMeta = new boolean[NUM_PLATAFORMAS];
+boolean nivelCompletado = false;
+
+// Tipos de plataforma del nivel 2. Se mantienen como arreglos paralelos,
+// igual que los datos de los enemigos, para no cambiar la estructura base.
+final int PLATAFORMA_NORMAL = 0;
+final int PLATAFORMA_MOVIL = 1;
+final int PLATAFORMA_CAE = 2;
+final int PLATAFORMA_TRAMPOLIN = 3;
+int[] plataformaTipo = new int[NUM_PLATAFORMAS];
+boolean[] plataformaActiva = new boolean[NUM_PLATAFORMAS];
+boolean[] plataformaCheckpoint = new boolean[NUM_PLATAFORMAS];
+int[] plataformaTiempo = new int[NUM_PLATAFORMAS];
+float[] plataformaVelX = new float[NUM_PLATAFORMAS];
+float[] plataformaVelZ = new float[NUM_PLATAFORMAS];
+float[] plataformaMinX = new float[NUM_PLATAFORMAS];
+float[] plataformaMaxX = new float[NUM_PLATAFORMAS];
+float[] plataformaMinZ = new float[NUM_PLATAFORMAS];
+float[] plataformaMaxZ = new float[NUM_PLATAFORMAS];
+int checkpointNivel2 = 0;
+final int FRAGMENTOS_NECESARIOS = 3;
+int fragmentosNivel2 = 0;
+boolean[] plataformaFragmento = new boolean[NUM_PLATAFORMAS];
+boolean[] fragmentoRecogido = new boolean[NUM_PLATAFORMAS];
+
+// Los dos tiradores del hub se controlan aparte porque en el nivel 2 no
+// caminan sobre la matriz: disparan desde plataformas y no persiguen.
+int[] tiradorNivel2ProximoDisparo = new int[2];
+boolean tiradoresNivel2Activos = false;
+final int CADENCIA_TIRADORES_NIVEL2 = 105;
+
+
+
+
+// --- estados de derrota, boton y mensajes de retroalimentacion ---
+
+boolean pausa = false;
+boolean juegoTerminado = false;
+int tiempoMuerte = 0;
+float botonAncho = 240;
+float botonAlto = 70;
+float botonX;
+float botonY;
+
+String mensajeActual = "";
+int mensajeHasta = 0;
+
+// --- estado de pantalla de carga inicial ---
+boolean cargandoInicio = true;
+int tiempoInicioCargaInicio = 0;
+boolean cargaInicioProcesada = false;
+
+// --- estado de pantalla de carga ---
+boolean cargandoNivel = false;
+int nivelACargar = 1;
+int tiempoInicioCarga = 0;
+boolean cargaProcesada = false;
+
+//
+
+
+// --- Estado del Minijuego ---
+boolean minijuegoActivo = false;
+int rastroActual = 0; // Rastro 0 o Rastro 1
+int terminalActual = 0;
+int opcionTerminal = 0;
+boolean[] terminalCompletada = new boolean[3];
+
+// 2 Rastros por cada una de las 3 terminales [Terminal][Rastro]
+String[][] rastrosTexto = {
+  {"[RASTRO 01] Compartir la dirección o el teléfono.", "[RASTRO 02] Subir fotos o videos."},
+  {"[RASTRO 01] Aparecer en fotos publicadas en redes sociales.", "[RASTRO 02] Comprar productos por internet."},
+  {"[RASTRO 01] privada	Compartir secretos o datos personales de alguien sin permiso.", "[RASTRO 02] Buscar información para una tarea."}
+};
+
+// Indica si el rastro es Peligroso (true) o Neutro (false)
+boolean[][] rastrosEsPeligroso = {
+  {true, false},
+  {true, false},
+  {true, false}
+};
+
+// Botones PELIGROSO / NEUTRO
+float btnPeligrosoX, btnPeligrosoY, btnNeutroX, btnNeutroY;
+float btnAncho = 180, btnAlto = 50;
+
+
+
+
+
+// Cada numero de la matriz apunta a una textura diferente del arreglo texturaDe.
+// Se cargan tambien las texturas que se reutilizan en las plataformas del nivel 2.
+void cargarTexturas() {
+  texturaDe[0] = loadImage("PisoTex.png");
+  texturaDe[1] = loadImage("ParedTex.png");
+  texturaDe[2] = loadImage("ParedTex[2].png");
+  texturaDe[3] = loadImage("ParedTex[3].png");
+  texturaDe[11] = loadImage("Piso[11]Tex.png");
+  texBanda = loadImage("TexBanda.png");
+  texturaNivel2 = loadImage("PisoTex2.png");
+}
+
+// Convierte cada cadena del archivo mapa.txt en una fila de la matriz mapa.
+// El archivo permite ampliar el nivel sin reescribir esta parte del programa.
+void cargarMapa() {
+  String[] lineas = loadStrings("mapa.txt");
+  mapa = new int[lineas.length][];
+
+  for (int i = 0; i < lineas.length; i++) {
+    mapa[i] = int(split(trim(lineas[i]), ','));
+  }
+}
+
+
+// Configura la ventana, carga recursos y deja el juego en el estado inicial.
+
+// =========================================================
+// GESTION SEGURA DE FUENTES (PREVENCION DE PFONT NULO)
+// =========================================================
+PFont cargarFuenteSegura(String nombre, int tamano) {
+  PFont f = null;
+  try {
+    f = createFont(nombre, tamano);
+  } catch (Exception e) {}
+  if (f == null) {
+    try { f = createFont("Black_Mustang.ttf", tamano); } catch (Exception e) {}
+  }
+  if (f == null) {
+    try { f = createFont("MAEL____.TTF", tamano); } catch (Exception e) {}
+  }
+  if (f == null) {
+    try { f = createFont("Blacky.otf", tamano); } catch (Exception e) {}
+  }
+  if (f == null) {
+    try { f = createFont("OLIVERSB.TTF", tamano); } catch (Exception e) {}
+  }
+  if (f == null) {
+    try { f = createFont("SansSerif", tamano); } catch (Exception e) {}
+  }
+  return f;
+}
+
+void aplicarFuente(PFont f) {
+  if (f != null) {
+    textFont(f);
+  } else if (fuente1 != null) {
+    aplicarFuente(fuente1);
+  } else if (fuenteTexto != null) {
+    aplicarFuente(fuenteTexto);
+  } else if (fuente != null) {
+    aplicarFuente(fuente);
+  }
+}
+
+void setup() {
+  fullScreen(P3D);
+  noCursor();
+  background(0);
+  pixelDensity(displayDensity());
+  smooth();
+  escalaX = width / REF_W;
+  escalaY = height / REF_H;
+  fuente1 = cargarFuenteSegura("Black_Mustang.ttf", 120);
+  fuente = cargarFuenteSegura("MAEL____.TTF", 120);
+  fuenteTexto = cargarFuenteSegura("OLIVERSB.TTF", 120);
+  if (fuenteTexto == null) fuenteTexto = fuente1;
+  if (fuente == null) fuente = fuente1;
+  aplicarFuente(fuente1);
+
+  cargandoInicio = true;
+  tiempoInicioCargaInicio = millis();
+  cargaInicioProcesada = false;
+}
+
+void ejecutarCargaInicio() {
+  iniciarMando();
+  terminal = loadShape("Terminal.obj");
+  BaseColor = loadImage("Base_Color.png");
+  terminal.setTexture(BaseColor);
+
+  if (fuente == null) fuente = cargarFuenteSegura("MAEL____.TTF", 120);
+  if (fuenteTexto == null) fuenteTexto = cargarFuenteSegura("OLIVERSB.TTF", 120);
+
+  // AUDIO
+  navegar = cargarSonido("NAVEGARMENU.MP3");
+  seleccionar = cargarSonido("CONFIRMAR.MP3");
+  jugar = cargarSonido("CONFIRM-SELECT.MP3");
+  no = cargarSonido("NO.MP3");
+  salir = cargarSonido("SALIR.MP3");
+  Audioprueba = cargarSonido("0910.MP3");
+  iniciar = cargarSonido("INICIO.MP3");
+  transicionBalas = cargarSonido("TRANSICION_BALAS.mp3");
+  sonidoCaminar = cargarSonido("CAMINAR.mp3");
+  sonidoCorrer = cargarSonido("CORRER.mp3");
+  sonidoDash = cargarSonido("DASH.mp3");
+  sonidoParry = cargarSonido("PARRY.mp3");
+  sonidoSalto = cargarSonido("SALTO.mp3");
+  sonidoHit = cargarSonido("HIT.mp3");
+  sonidoUlti = cargarSonido("ULTI.mp3");
+  sonidoDisparo = cargarSonido("DISPARO.mp3");
+  sonidoCristal = cargarSonido("CRISTAL.mp3");
+
+  Sound.volume(volumenjuego);
+
+  // IMAGENES
+  breakingbugs = loadImage("BREAKING BUGS.jpg");
+  iconomando = loadImage("IMAGEN MANDO.jpg");
+  logo = loadImage("LOGO_REMANENTE.png");
+  imagenmenu = loadImage("FONDOMENU.jpeg");
+  imagenjugar = loadImage("IMAGENJUGAR.jpg");
+  mision1Preview = loadImage("MISION1_PREVIEW.jpg");
+  mision2Preview = loadImage("MISION2_PREVIEW.jpg");
+  mision3Preview = loadImage("MISION3_PREVIEW.png");
+  ventanasalirimagen = loadImage("IMAGEN SALIR.png");
+  creditosdetras = loadImage("IMAGENCREDITOSDETRAS.png");
+  grietas = loadImage("GRIETAS.png");
+  grietasBlancas = loadImage("GRIETASBLANCAS.png");
+  caja = loadImage("CAJAMENU.png");
+  opciones = loadImage("OPCIONES.jpg");
+  derrota = loadImage("DERROTADO.png");
+  balazo = loadImage("BALAZO.png");
+  victoriaImg = loadImage("VICTORIA.png");
+  victoriaFondo = loadImage("VICTORIAFONDO.jpg");
+  fondoderrota = loadImage("DERROTAFONDO2.jpg");
+  if (fondoderrota == null || fondoderrota.width <= 0) {
+    fondoderrota = loadImage("DERROTAFONDO.jpg");
+  }
+
+  menu = new Movie(this, "MENUVIDEO.mp4");
+  try {
+    cinematicaNivel1 = new Movie(this, "cinematica1.mp4");
+  } catch (Exception _e) {
+    try {
+      cinematicaNivel1 = new Movie(this, "CINEMATICA 1.mp4");
+    } catch (Exception _e2) {}
+  }
+
+  textureMode(NORMAL);
+  noStroke();
+
+  cargarTexturas();
+  cargarSpritesProta();
+  cargarSpritesEnemigos();
+  cargarMapa();
+  CrearMiniMapaBase();
+  configurarPlataformasNivel2();
+
+  botonAncho = 240 * escalaX;
+  botonAlto = 70 * escalaY;
+  botonX = width / 2 - botonAncho / 2;
+  botonY = height / 2 + 70 * escalaY;
+  reiniciarJuego();
+  cargaInicioProcesada = true;
+}
+void draw() {
+  if (PantallaDeJuego == 1 && minijuegoActivo && !pausa) cursor();
+  else noCursor();
+  if (cargandoInicio) {
+    dibujarPantallaDeCargaInicio();
+    return;
+  }
+
+  pollMando();
+  fusionarEntradas();
+
+  if (cargandoNivel) {
+    dibujarPantallaDeCarga();
+    return;
+  }
+
+  if (reproduciendoCinematica) {
+    dibujarCinematica();
+    return;
+  }
+
+  if (reproduciendoCinematicaNivel3) {
+    dibujarCinematicaNivel3();
+    return;
+  }
+
+  if (PantallaDeJuego == 0) {
+    camera();
+    hint(DISABLE_DEPTH_TEST);
+    noLights();
+    Menu();
+  }
+
+
+  if (PantallaDeJuego == 1) {
+    actualizarCamara();
+    background(5, 9, 16);
+    ambientLight(150, 150, 150);
+    luzDeBandas();
+
+    // Mientras no haya una pantalla final, se actualiza solo el nivel activo.
+    if (!juegoTerminado && !nivelCompletado && !pausa && !minijuegoActivo
+      && frameCount >= hitStopHasta) {
+      if (nivelActual == 1) {
+
+
+        aplicarGravedad();
+        moverJugador();
+        //aplicarFisicaNivel2();
+        MostrarTerminal();
+        moverEnemigos();
+        revisarDanioAJugador();
+        moverProyectiles();
+        revisarDanioPorProyectiles();
+        revisarTransicionDeNivel();
+      } else if (nivelActual == 2) {
+        boolean estabaEnElSuelo = enElSuelo;
+        actualizarPlataformasNivel2();
+        moverJugadorNivel2();
+        aplicarGravedad();
+        actualizarTiradoresNivel2();
+        moverProyectiles();
+        revisarDanioPorProyectiles();
+        if (enElSuelo) {
+          int i = plataformaBajo(JugadorX, JugadorZ);
+          if (i >= 0) {
+            revisarActivacionTiradoresNivel2(i);
+            if (!estabaEnElSuelo) aterrizarNivel2(i);
+            if (esMeta[i] && fragmentosNivel2 >= FRAGMENTOS_NECESARIOS) {
+              if (!nivelCompletado) {
+                nivelCompletado = true;
+                tiempoVictoria = millis();
+                sonidoVictoriaReproducido = false;
+                botonvictoria = 0;
+                tiempoAnim = millis();
+              }
+            }
+          }
+        }
+      } else {
+        boolean estabaEnElSuelo = enElSuelo;
+        if (zonaNivel3 == NIVEL3_PLATAFORMAS) actualizarPlataformasNivel3();
+        moverJugador();
+        actualizarNivel3();
+        aplicarGravedad();
+        if (enElSuelo && !estabaEnElSuelo && zonaNivel3 == NIVEL3_PLATAFORMAS) {
+          int plataforma = plataformaBajoNivel3(JugadorX, JugadorZ);
+          if (plataforma >= 0) aterrizarNivel3(plataforma);
+        }
+        moverEnemigos();
+        actualizarJefeNivel3();
+        revisarDanioAJugador();
+        moverProyectiles();
+        revisarDanioPorProyectiles();
+        if (nivelCompletado && tiempoVictoria == 0) {
+          tiempoVictoria = millis();
+          sonidoVictoriaReproducido = false;
+          botonvictoria = 0;
+          tiempoAnim = millis();
+        }
+      }
+      revisarCaida();
+    }
+
+    if (vidaJugador <= 0) {
+      if (!juegoTerminado) {
+        juegoTerminado = true;
+        tiempoMuerte = millis();
+      }
+    }
+
+    // El nivel 1 usa la matriz y el nivel 2 usa plataformas independientes.
+    if (nivelActual == 1) {
+      dibujarMapa();
+      dibujarSalidaNivel1();
+      dibujarEnemigos();
+      dibujarProyectiles();
+      terminales();
+    } else if (nivelActual == 2) {
+      dibujarNivel2();
+      dibujarEnemigos();
+      dibujarProyectiles();
+    } else {
+      dibujarMapa();
+      dibujarNivel3();
+      dibujarEnemigos();
+      dibujarProyectiles();
+    }
+
+    dibujarJugador();
+    dibujarHUD();
+    actualizarSonidosPasos();
+
+
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// La transicion depende de la celda de salida y de haber derrotado a los enemigos.
+void revisarTransicionDeNivel() {
+  int filaJugador = constrain(celdaDe(JugadorZ), 0, mapa.length - 1);
+  int colJugador = constrain(celdaDe(JugadorX), 0, mapa[0].length - 1);
+
+  if (filaJugador == SALIDA_FILA && colJugador == SALIDA_COL) {
+    if (enemigosVivos() == 0) {
+      iniciarCargaNivel(2);
+      mostrarMensaje("Nivel 2: equilibrio", 120);
+    } else {
+      mostrarMensaje("Derrota a todos los enemigos", 45);
+    }
+  }
+}
+
+
+
+// Devuelve todos los arreglos y estados a sus valores iniciales.
+void reiniciarJuego() {
+  // Si se vuelve desde el nivel 3, se recupera el mapa original del nivel 1.
+  cargarMapa();
+  JugadorX = 20 * TAM_CELDA;
+  JugadorZ = 40 * TAM_CELDA;
+  JugadorY = alturaDePiso(JugadorX, JugadorZ) - 75;
+  velocidadBase = 13;
+  velocidadCarrera = 19;
+  velocidad = velocidadBase;
+  velocidadY = 0;
+  enElSuelo = true;
+  coyoteHasta = 0;
+  saltoSolicitadoHasta = 0;
+  anguloCamara = 520;
+  inclinacionCamara = 0;
+  direccionJugadorX = 0;
+  direccionJugadorZ = -1;
+
+  vidaJugador = VIDAS_INICIALES;
+  ultimoGolpeRecibido = -1000;
+  ultimoAtaqueJugador = -1000;
+  ataqueVisibleHasta = 0;
+  ultimoDash = -1000;
+  dashHasta = 0;
+  dashActivo = false;
+  invulnerableHasta = 0;
+  ultimoParry = -1000;
+  parryHasta = 0;
+  ultimoAtaqueEspecial = -1000;
+  ataqueEspecialVisibleHasta = 0;
+  memoriaActual = 0;
+  hitStopHasta = 0;
+  temblorCamaraHasta = 0;
+  intensidadTemblorCamara = 0;
+
+  configurarEnemigo(0, 86, 21, 3, 15.5, color(220, 45, 55), TIPO_PERSEGUIDOR);
+  configurarEnemigo(1, 106, 57, 2, 17.0, color(245, 145, 45), TIPO_EMBESTIDOR);
+  configurarEnemigo(2, 112, 91, 4, 15.0, color(180, 70, 220), TIPO_TANQUE);
+  configurarEnemigo(3, 26, 38, 3, 13.0, color(80, 210, 255), TIPO_TIRADOR);
+  configurarEnemigo(4, 65, 30, 3, 15.2, color(235, 65, 150), TIPO_PERSEGUIDOR);
+  configurarEnemigo(5, 150, 30, 2, 17.0, color(255, 170, 45), TIPO_EMBESTIDOR);
+  configurarEnemigo(6, 30, 42, 3, 13.0, color(80, 210, 255), TIPO_TIRADOR);
+  configurarEnemigo(7, 50, 55, 5, 14.5, color(180, 70, 220), TIPO_TANQUE);
+  configurarEnemigo(8, 100, 70, 3, 13.0, color(80, 210, 255), TIPO_TIRADOR);
+
+  for (int i = 0; i < NUM_PROYECTILES; i++) proyectilesActivo[i] = false;
+
+  nivelActual = 1;
+  juegoTerminado = false;
+  tiempoMuerte = 0;
+  sonidoDerrotaReproducido = false;
+  tiempoVictoria = 0;
+  tiempoInicioTerminal = 0;
+  ultimoRastroVisto = -1;
+  nivelCompletado = false;
+  minijuegoActivo = false;
+  EnTerminal = false;
+  rastroActual = 0;
+  terminalActual = 0;
+  opcionTerminal = 0;
+  for (int i = 0; i < 3; i++) terminalCompletada[i] = false;
+  mensajeActual = "";
+  mensajeHasta = 0;
+  pausa = false;
+  botonpausa = 0;
+  sonidoVictoriaReproducido = false;
+  botonvictoria = 0;
+  volumenPausa = false;
+  tiempoAnim = millis();
+
+  for (int i = 0; i < teclas.length; i++) teclas[i] = false;
+  for (int i = 0; i < lados.length; i++) lados[i] = false;
+  for (int i = 0; i < mirarVertical.length; i++) mirarVertical[i] = false;
+}
+
+void movieEvent(Movie m) {
+  m.read();
+}
+
+SoundFile cargarSonido(String archivo) {
+  try {
+    return new SoundFile(this, archivo);
+  } catch (Exception e) {
+    println("No se pudo cargar el audio: " + archivo);
+    return null;
+  }
+}
+
+void actualizarSonidosPasos() {
+  boolean enJuegoActivo = (PantallaDeJuego == 1 && !pausa && !minijuegoActivo && !juegoTerminado && !nivelCompletado && !reproduciendoCinematica && !reproduciendoCinematicaNivel3);
+  boolean seMueve = (teclas[0] || teclas[1] || teclas[2] || teclas[3]);
+  boolean pisandoSuelo = enElSuelo;
+
+  if (enJuegoActivo && seMueve && pisandoSuelo) {
+    if (corriendo) {
+      if (sonidoCaminar != null && sonidoCaminar.isPlaying()) {
+        try { sonidoCaminar.stop(); } catch (Exception e) {}
+      }
+      if (sonidoCorrer != null && !sonidoCorrer.isPlaying()) {
+        try { sonidoCorrer.loop(); } catch (Exception e) {}
+      }
+    } else {
+      if (sonidoCorrer != null && sonidoCorrer.isPlaying()) {
+        try { sonidoCorrer.stop(); } catch (Exception e) {}
+      }
+      if (sonidoCaminar != null && !sonidoCaminar.isPlaying()) {
+        try { sonidoCaminar.loop(); } catch (Exception e) {}
+      }
+    }
+  } else {
+    if (sonidoCorrer != null && sonidoCorrer.isPlaying()) {
+      try { sonidoCorrer.stop(); } catch (Exception e) {}
+    }
+    if (sonidoCaminar != null && sonidoCaminar.isPlaying()) {
+      try { sonidoCaminar.stop(); } catch (Exception e) {}
+    }
+  }
+}

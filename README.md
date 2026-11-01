@@ -10,17 +10,18 @@
 
 ## Sobre el proyecto
 
-**Proyecto Mnemosine** es un videojuego desarrollado en **Java (Processing)** como parte del laboratorio *"Conectados, pero no atrapados — Uso saludable de las redes sociales"* de la asignatura Algoritmia y Programación II.
+**Proyecto Mnemosine** es un videojuego desarrollado en **Java (Processing)** como parte del laboratorio _"Conectados, pero no atrapados — Uso saludable de las redes sociales"_ de la asignatura Algoritmia y Programación II.
 
 En lugar de abordar el tema de forma educativa tradicional, el juego lo interpreta desde una narrativa cyberpunk/noir: el jugador controla a un detective privado que trabaja para eliminar información almacenada por corporaciones de vigilancia digital, ayudando a las personas a recuperar el control sobre su huella digital.
 
 La conexión temática gira en torno a:
+
 - Privacidad digital y huella digital.
 - Vigilancia corporativa.
 - Consecuencias de compartir y almacenar información en internet.
 - El derecho al olvido.
 
-> *"Mnemosine representa la memoria; el objetivo del protagonista es hacer que cierta información deje de ser recordada digitalmente."*
+> _"Mnemosine representa la memoria; el objetivo del protagonista es hacer que cierta información deje de ser recordada digitalmente."_
 
 ## Estado del proyecto
 
@@ -40,12 +41,12 @@ proyecto-mnemosine/
 
 ## Equipo
 
-| Rol | Integrante |
-|---|---|
-| Líder de Proyecto | *Pendiente* |
-| Diseñador | *Pendiente* |
-| Programador | *Pendiente* |
-| Documentador Técnico | *Pendiente* |
+| Rol                  | Integrante        |
+| -------------------- | ----------------- |
+| Líder de Proyecto    | Ferney Jimenez    |
+| Diseñador            | Luis Padilla      |
+| Programador          | Santiago Monsalvo |
+| Documentador Técnico | Cesar Lugo        |
 
 ## Requisitos técnicos del laboratorio
 

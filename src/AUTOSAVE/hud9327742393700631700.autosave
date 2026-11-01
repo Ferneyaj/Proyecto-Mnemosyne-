@@ -1,0 +1,561 @@
+// Dibuja la informacion de vidas, nivel, cooldown, mensajes y pantallas finales.
+boolean sonidoDerrotaReproducido = false;
+boolean sonidoVictoriaReproducido = false;
+int tiempoVictoria = 0;
+int tiempoInicioTerminal = 0;
+int ultimoRastroVisto = -1;
+int mensajeInicio = 0;
+int mensajeDuracion = 45;
+
+void dibujarHUD() {
+  camera();
+  hint(DISABLE_DEPTH_TEST);
+  noLights();
+  fill(245);
+  textAlign(LEFT, BASELINE);
+  textSize(24 * escalaY);
+
+
+ if (pausa) {
+    fill(0, 0, 0, 150);
+    rect(0, 0, width, height);
+
+    textAlign(LEFT, BASELINE);
+    textFont(fuente1);
+
+    if (tiempoInicioPausa < 0) {
+      tiempoInicioPausa = millis();
+      tiempoAnim = millis();
+    }
+    int tiempoPausa = millis() - tiempoInicioPausa;
+
+    if (!volumenPausa) {
+      tiempoInicioSubOpcion = -10000;
+    }
+
+    // Cascada de botones con transicion al mismo estilo que el menu principal
+    if (tiempoPausa >= 120) {
+      float p = constrain((tiempoPausa - 120) / 160.0, 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3);
+      float x = (tiempoPausa >= 280) ? 108 : (108 - (1.0 - e) * 80.0);
+      fill(200, 15, 15);
+      crearbotongrueso("PAUSA", x, 130, 120);
+      fill(255);
+      textSize(120*escalaY);
+      text("PAUSA", x*escalaX, 130*escalaY);
+
+      if (volumenPausa) {
+        fill(200, 15, 15);
+        crearbotongrueso("VOLUMEN", 520, 130, 120);
+        fill(255);
+        textSize(120*escalaY);
+        text("VOLUMEN", 520*escalaX, 130*escalaY);
+      }
+    }
+
+    if (tiempoPausa >= 180) {
+      float p = constrain((tiempoPausa - 180) / 160.0, 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3);
+      float x = (tiempoPausa >= 340) ? 108 : (108 - (1.0 - e) * 80.0);
+      animacionboton(botonpausa, 0, "REANUDAR", x, 271, 60, rojo);
+    }
+
+    if (tiempoPausa >= 240) {
+      float p = constrain((tiempoPausa - 240) / 160.0, 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3);
+      float x = (tiempoPausa >= 400) ? 108 : (108 - (1.0 - e) * 80.0);
+      animacionboton(botonpausa, 1, "SONIDO", x, 365, 60, rojo);
+    }
+
+    if (volumenPausa) {
+      if (tiempoInicioSubOpcion < 0) {
+        tiempoInicioSubOpcion = millis();
+      }
+      int tiempoSub = millis() - tiempoInicioSubOpcion;
+
+      boolean mostrarBotonMenos = tiempoSub >= 40;
+      boolean mostrarBarraVolumen = tiempoSub >= 80;
+      boolean mostrarBotonMas = tiempoSub >= 240;
+
+      if (mostrarBotonMenos) {
+        fill(0);
+        crearboton("-", 766, 385, 90);
+        fill(255);
+        textSize(90*escalaY);
+        text("-", 766*escalaX, 385*escalaY);
+      }
+
+      if (mostrarBarraVolumen) {
+        dibujarBarraVolumen(botonvolumen);
+      }
+
+      if (mostrarBotonMas) {
+        fill(0);
+        crearboton("+", 1269, 385, 90);
+        fill(255);
+        textSize(90*escalaY);
+        text("+", 1269*escalaX, 385*escalaY);
+      }
+
+      if (tiempoSub >= 260) {
+        fill(96, 96, 98);
+        textSize(30*escalaY);
+        text("Presiona ESC para regresar", 890*escalaX, 820*escalaY);
+      }
+    }
+
+    if (tiempoPausa >= 300) {
+      float p = constrain((tiempoPausa - 300) / 160.0, 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3);
+      float x = (tiempoPausa >= 460) ? 108 : (108 - (1.0 - e) * 80.0);
+      animacionboton(botonpausa, 2, "CONTROLES", x, 459, 60, rojo);
+    }
+
+    if (tiempoPausa >= 360) {
+      float p = constrain((tiempoPausa - 360) / 160.0, 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3);
+      float x = (tiempoPausa >= 520) ? 108 : (108 - (1.0 - e) * 80.0);
+      animacionboton(botonpausa, 3, "SALIR AL MENU", x, 553, 60, rojo);
+    }
+  } else {
+    tiempoInicioPausa = -10000;
+    fill(245);
+    textAlign(LEFT, BASELINE);
+    textSize(24 * escalaY);
+    text("Vida: " + vidaJugador, 30 * escalaX, 38 * escalaY);
+    text("Nivel " + nivelActual, 30 * escalaX, 70 * escalaY);
+
+    if (nivelActual == 1) {
+      text("Enemigos: " + enemigosVivos() + "/" + NUM_ENEMIGOS, 30 * escalaX, 102 * escalaY);
+      text("E: atacar", 30 * escalaX, 134 * escalaY);
+      dibujarBarraCooldown();
+      dibujarBarraMemoria();
+      fill(210);
+      textSize(16 * escalaY);
+      text("R: esquiva   F: parry   G: especial", 30 * escalaX, 220 * escalaY);
+      dibujarMinimapa();
+    } else {
+      text("WASD: mover   SPACE: saltar", 30 * escalaX, 104 * escalaY);
+      text("Fragmentos: " + fragmentosNivel2 + "/" + FRAGMENTOS_NECESARIOS,
+        30 * escalaX, 136 * escalaY);
+      text("Checkpoint: hub central", 30 * escalaX, 168 * escalaY);
+      text(fragmentosNivel2 < FRAGMENTOS_NECESARIOS
+        ? "Explora las tres ramas"
+        : "Puente final desbloqueado", 30 * escalaX, 200 * escalaY);
+    }
+
+    fill(210);
+    textSize(18 * escalaY);
+    text("WASD mover | SHIFT correr | flechas mirar | SPACE saltar", 30 * escalaX, height - 28 * escalaY);
+
+    if (frameCount < mensajeHasta) {
+      textAlign(CENTER, CENTER);
+      float progMsg = constrain((frameCount - mensajeInicio) / float(max(1, mensajeDuracion)), 0, 1);
+      float flotarY = progMsg * 18 * escalaY;
+      float alfaMsg = progMsg > 0.7 ? map(progMsg, 0.7, 1.0, 255, 0) : 255;
+
+      // Temblor en los primeros 8 frames si es mensaje de daÃ±o
+      float temblor = 0;
+      if (mensajeActual.indexOf("vida") >= 0 || mensajeActual.indexOf("Impacto") >= 0) {
+        if (frameCount - mensajeInicio < 8) temblor = random(-4, 4);
+        fill(255, 80, 80, alfaMsg);
+      } else if (mensajeActual.indexOf("derrotado") >= 0 || mensajeActual.indexOf("Nivel") >= 0) {
+        fill(60, 255, 200, alfaMsg);
+      } else {
+        fill(255, 230, 120, alfaMsg);
+      }
+
+      textSize(26 * escalaY);
+      text(mensajeActual, (768 + temblor) * escalaX, (height - 75 * escalaY) - flotarY);
+    }
+  }
+
+  if (!pausa && !juegoTerminado) {
+    TerminalMiniJuego();
+  }
+  textAlign(LEFT, BASELINE);
+  textFont(fuente1);
+  hint(ENABLE_DEPTH_TEST);
+}
+
+// Representa visualmente el tiempo restante antes de poder volver a atacar.
+void dibujarBarraCooldown() {
+  float progreso = constrain((frameCount - ultimoAtaqueJugador) / float(cooldownAtaque), 0, 1);
+  float ancho = 220 * escalaX;
+  noStroke();
+  fill(45, 50, 60);
+  rect(30 * escalaX, 148 * escalaY, ancho, 16 * escalaY, 4 * escalaY);
+  fill(40, 210, 180);
+  rect(30 * escalaX, 148 * escalaY, ancho * progreso, 16 * escalaY, 4 * escalaY);
+
+  if (progreso >= 1) {
+    float pulsoListo = map(sin(millis() * 0.012), -1, 1, 0, 1);
+    fill(lerpColor(color(40, 240, 190), color(255), pulsoListo));
+    textSize((16 + 2 * pulsoListo) * escalaY);
+    text("Listo!", 260 * escalaX, 161 * escalaY);
+  } else {
+    fill(180);
+    textSize(16 * escalaY);
+    text("Recargando", 260 * escalaX, 161 * escalaY);
+  }
+}
+
+// La barra de Memoria se llena al golpear, esquivar o hacer parry.
+// Al llegar al maximo permite usar el pulso especial con G o Y.
+void dibujarBarraMemoria() {
+  float progreso = memoriaActual / float(MEMORIA_MAX);
+  float ancho = 220 * escalaX;
+  noStroke();
+  fill(35, 50, 60);
+  rect(30 * escalaX, 176 * escalaY, ancho, 16 * escalaY, 4 * escalaY);
+  fill(70, 235, 210);
+  rect(30 * escalaX, 176 * escalaY, ancho * progreso, 16 * escalaY, 4 * escalaY);
+  fill(220);
+  textSize(16 * escalaY);
+  text("Memoria " + memoriaActual + "/" + MEMORIA_MAX, 260 * escalaX, 189 * escalaY);
+}
+
+
+
+
+
+
+// Convierte la matriz completa en una vista circular estilo radar, un poco mas grande
+void dibujarMinimapa() {
+
+  float diametro = 350;
+  float centroX = width - (diametro / 2) - 35;
+  float centroY = height - (diametro / 2) - 35;
+
+  float miniAncho = 200;
+  float miniAlto = miniAncho * (mapa[0].length / float(mapa.length));
+
+  float miniX = centroX - (miniAncho / 2);
+  float miniY = centroY - (miniAlto / 2) - 15;
+
+  float celdaH = miniAncho / mapa.length;
+  float celdaV = miniAlto / mapa[0].length;
+
+  noStroke();
+  fill(10, 15, 24, 235);
+  ellipse(centroX, centroY, diametro, diametro);
+
+
+  for (int f = 0; f < mapa.length; f++) {
+    for (int c = 0; c < mapa[f].length; c++) {
+      int valor = mapa[f][c];
+
+      if (valor == 4 || valor == -1) continue;
+
+      // X normal (izquierda es izquierda) y Y de abajo hacia arriba:
+      float celdaX = miniX + f * celdaH;
+      float celdaY = miniY + (mapa[0].length - 1 - c) * celdaV;
+
+      if (dist(celdaX, celdaY, centroX, centroY) > diametro / 2 - 4) continue;
+
+      if (esPared(valor)) {
+        fill(45, 60, 85);
+        rect(celdaX, celdaY, celdaH + 0.8, celdaV + 0.8);
+      } else if (esPiso(valor)) {
+        fill(210, 235, 255);
+        rect(celdaX, celdaY, celdaH + 0.8, celdaV + 0.8);
+      }
+    }
+  }
+
+ fill(0, 255, 200);
+  rect(miniX + SALIDA_FILA * celdaH, miniY + (mapa[0].length - 1 - SALIDA_COL) * celdaV, celdaH * 2.5, celdaV * 2.5);
+
+
+  float colJugador = constrain(celdaDe(JugadorX), 0, mapa[0].length - 1);
+  float filaJugador = constrain(celdaDe(JugadorZ), 0, mapa.length - 1);
+  float jugPixelX = miniX + (filaJugador + 0.5) * celdaH;
+  float jugPixelY = miniY + (mapa[0].length - 1 - colJugador + 0.5) * celdaV;
+
+  fill(255);
+  ellipse(jugPixelX, jugPixelY, 14, 14);
+  fill(0, 190, 255);
+  ellipse(jugPixelX, jugPixelY, 8, 8);
+
+
+
+  for (int i = 0; i < NUM_ENEMIGOS; i++) {
+    if (!enemigosActivo[i]) continue;
+    float colE = constrain(celdaDe(enemigosX[i]), 0, mapa[0].length - 1);
+    float filaE = constrain(celdaDe(enemigosZ[i]), 0, mapa.length - 1);
+    float ePixelX = miniX + (filaE + 0.5) * celdaH;
+    float ePixelY = miniY + (mapa[0].length - 1 - colE + 0.5) * celdaV;
+
+    fill(255, 40, 50);
+    ellipse(ePixelX, ePixelY, 10, 10);
+  }
+
+
+  noFill();
+  stroke(235, 30, 45, 230);
+  strokeWeight(4);
+  ellipse(centroX, centroY, diametro, diametro);
+
+  stroke(130, 20, 30, 150);
+  strokeWeight(2);
+  ellipse(centroX, centroY, diametro + 14, diametro + 14);
+  noStroke();
+}
+
+
+void mostrarMensaje(String mensaje, int duracion) {
+  mensajeActual = mensaje;
+  mensajeHasta = frameCount + duracion;
+  mensajeInicio = frameCount;
+  mensajeDuracion = duracion;
+}
+
+
+
+
+void MostrarTerminal() {
+  if (CercaTerminal() && !minijuegoActivo) {
+    mostrarMensaje("Presione Q para abrir el terminal", 30);
+  }
+}
+
+
+
+
+
+void TerminalMiniJuego() {
+
+  if (minijuegoActivo) {
+
+
+    // 1. Cuadrado verde transparente estilo consola
+    float panelAncho = 700 * escalaX;
+    float panelAlto = 450 * escalaY;
+    float panelX = width/2 - panelAncho/2;
+    float panelY = height/2 - panelAlto/2;
+
+    stroke(0, 255, 150);
+    strokeWeight(3 * escalaY);
+    fill(5, 25, 15, 235);
+    rect(panelX, panelY, panelAncho, panelAlto, 15 * escalaY);
+
+    // 2. Encabezado
+    fill(0, 255, 150);
+    textAlign(CENTER, CENTER);
+    textSize(26 * escalaY);
+    text("ANALIZADOR DE RASTROS DIGITALES", width/2, panelY + 45 * escalaY);
+
+    textSize(18 * escalaY);
+    fill(180, 220, 200);
+    text("Rastro " + (rastroActual + 1) + " / 2", width/2, panelY + 80 * escalaY);
+    strokeWeight(1 * escalaY);
+    line(panelX + 40 * escalaX, panelY + 100 * escalaY, panelX + panelAncho - 40 * escalaX, panelY + 100 * escalaY);
+
+    // 3. Contenido del rastro con efecto mÃ¡quina de escribir
+    if (tiempoInicioTerminal == 0 || ultimoRastroVisto != rastroActual) {
+      tiempoInicioTerminal = millis();
+      ultimoRastroVisto = rastroActual;
+    }
+    String textoCompleto = rastrosTexto[0][rastroActual];
+    int charsAMostrar = min(textoCompleto.length(), max(0, (millis() - tiempoInicioTerminal) / 22));
+    String textoAnimado = textoCompleto.substring(0, charsAMostrar);
+    if (charsAMostrar < textoCompleto.length() || (millis() / 250) % 2 == 0) {
+      textoAnimado += "_";
+    }
+    fill(255);
+    textSize(22 * escalaY);
+    text(textoAnimado, panelX + 50 * escalaX, panelY + 130 * escalaY, panelAncho - 100 * escalaX, 120 * escalaY);
+
+    // 4. Coordenadas y dibujo de Botones
+    btnAncho = 180 * escalaX;
+    btnAlto = 50 * escalaY;
+    btnPeligrosoX = width/2 - 210 * escalaX;
+    btnNeutroX = width/2 + 30 * escalaX;
+    btnPeligrosoY = panelY + 320 * escalaY;
+    btnNeutroY = panelY + 320 * escalaY;
+
+    // Boton PELIGROSO (Rojo)
+    boolean hoverPeligroso = mouseX > btnPeligrosoX && mouseX < btnPeligrosoX + btnAncho && mouseY > btnPeligrosoY && mouseY < btnPeligrosoY + btnAlto;
+    fill(hoverPeligroso ? color(230, 40, 50) : color(150, 20, 30));
+    stroke(255, 80, 80);
+    rect(btnPeligrosoX, btnPeligrosoY, btnAncho, btnAlto, 8 * escalaY);
+    fill(255);
+    textSize(20 * escalaY);
+    text("PELIGROSO", btnPeligrosoX + btnAncho/2, btnPeligrosoY + btnAlto/2);
+
+    // Boton NEUTRO (Azul)
+    boolean hoverNeutro = mouseX > btnNeutroX && mouseX < btnNeutroX + btnAncho && mouseY > btnNeutroY && mouseY < btnNeutroY + btnAlto;
+    fill(hoverNeutro ? color(40, 160, 230) : color(20, 90, 150));
+    stroke(100, 200, 255);
+    rect(btnNeutroX, btnNeutroY, btnAncho, btnAlto, 8 * escalaY);
+    fill(255);
+    textSize(20 * escalaY);
+    text("NEUTRO", btnNeutroX + btnAncho/2, btnNeutroY + btnAlto/2);
+
+    fill(150);
+    textSize(14 * escalaY);
+    text("Presiona ESC para cerrar", width/2, panelY + panelAlto - 25 * escalaY);
+    noStroke();
+  }
+}
+
+// ====================================================================
+// PANTALLA DE CARGA CON RELOJ DE ARENA GIRATORIO Y PRE-CARGA DE RECURSOS
+// ====================================================================
+
+void iniciarCargaNivel(int nivel) {
+  cargandoNivel = true;
+  nivelACargar = nivel;
+  tiempoInicioCarga = millis();
+  cargaProcesada = false;
+  pausa = false;
+  nivelCompletado = false;
+  juegoTerminado = false;
+  tiempoMuerte = 0;
+  sonidoDerrotaReproducido = false;
+  tiempoVictoria = 0;
+  sonidoVictoriaReproducido = false;
+  botonvictoria = 0;
+  tiempoInicioTerminal = 0;
+  ultimoRastroVisto = -1;
+}
+
+// Pre-carga y sube las texturas a la VRAM de la GPU para que no haya micro-tirones (lag) al entrar al nivel
+void precalentarTexturas() {
+  pushMatrix();
+  translate(0, 0, -20000);
+  noStroke();
+  fill(0, 0);
+
+  for (int n = 0; n < texturaDe.length; n++) {
+    if (texturaDe[n] != null) {
+      beginShape(QUADS);
+      texture(texturaDe[n]);
+      vertex(0, 0, 0, 0);
+      vertex(1, 0, 1, 0);
+      vertex(1, 1, 1, 1);
+      vertex(0, 1, 0, 1);
+      endShape();
+    }
+  }
+
+  if (texBanda != null) {
+    beginShape(QUADS);
+    texture(texBanda);
+    vertex(0, 0, 0, 0);
+    vertex(1, 0, 1, 0);
+    vertex(1, 1, 1, 1);
+    vertex(0, 1, 0, 1);
+    endShape();
+  }
+
+  if (texturaNivel2 != null) {
+    beginShape(QUADS);
+    texture(texturaNivel2);
+    vertex(0, 0, 0, 0);
+    vertex(1, 0, 1, 0);
+    vertex(1, 1, 1, 1);
+    vertex(0, 1, 0, 1);
+    endShape();
+  }
+
+  popMatrix();
+}
+
+// Dibuja un reloj de arena minimalista que rota suavemente (borde rojo, adentro blanco)
+void dibujarRelojDeArena(float x, float y, float tamano, float rot) {
+  pushMatrix();
+  translate(x, y);
+  rotate(rot);
+
+  float w = tamano * 0.64;
+  float h = tamano;
+
+  // 1. Arena interior (ADENTRO BLANCO)
+  noStroke();
+  fill(255); // Blanco puro
+
+  // Arena acumulada en el bulbo inferior
+  triangle(-w * 0.36, h/2 - 4, w * 0.36, h/2 - 4, 0, h * 0.16);
+
+  // Arena en el bulbo superior cayendo
+  triangle(-w * 0.30, -h/2 + 6, w * 0.30, -h/2 + 6, 0, -h * 0.1);
+
+  // Hilo de arena cayendo por el cuello central (blanco)
+  stroke(255);
+  strokeWeight(3);
+  line(0, -h * 0.1, 0, h * 0.28);
+
+  // 2. Borde y tapas del reloj (BORDE ROJO MÃS GRUESO)
+  stroke(235, 30, 45); // Rojo vivo cyberpunk
+  strokeWeight(4.5);
+  strokeCap(ROUND);
+  strokeJoin(ROUND);
+  noFill();
+
+  // Tapa superior e inferior
+  line(-w/2, -h/2, w/2, -h/2);
+  line(-w/2, h/2, w/2, h/2);
+
+  // Cristal en forma de X (los dos bulbos unidos)
+  line(-w/2, -h/2, 0, 0);
+  line( w/2, -h/2, 0, 0);
+  line( 0, 0, -w/2, h/2);
+  line( 0, 0, w/2, h/2);
+
+  popMatrix();
+  noStroke();
+}
+
+// Dibuja la pantalla negra con el texto grande y el reloj de arena en la esquina inferior derecha
+void dibujarPantallaDeCarga() {
+  camera();
+  hint(DISABLE_DEPTH_TEST);
+  noLights();
+  background(0); // Pantalla completamente negra
+
+  float tiempoTranscurrido = millis() - tiempoInicioCarga;
+
+  // Coordenadas en la esquina inferior derecha (mÃ¡s espaciadas y grandes)
+  float margenDer = 75 * escalaX;
+  float margenAbj = 70 * escalaY;
+  float relojX = width - margenDer;
+  float relojY = height - margenAbj;
+
+  // 1. Reloj de arena mÃ¡s grande (tamaÃ±o 70 px) con rotaciÃ³n continua
+  float rotacion = tiempoTranscurrido * 0.0035;
+  dibujarRelojDeArena(relojX, relojY, 70 * escalaY, rotacion);
+
+  // 2. Palabra "CARGANDO..." mÃ¡s grande (tamaÃ±o 54 px, fuente Black Mustang, color blanco)
+  fill(255);
+  textAlign(RIGHT, CENTER);
+  textFont(fuente1); // Black Mustang
+  textSize(54 * escalaY);
+  text("CARGANDO...", relojX - 55 * escalaX, relojY - 4 * escalaY);
+
+  // 3. Proceso interno de carga de recursos y texturas (despuÃ©s de mostrar el primer frame)
+  if (tiempoTranscurrido > 80 && !cargaProcesada) {
+    precalentarTexturas();
+    if (nivelACargar == 1) {
+      nivelActual = 1;
+      reiniciarJuego();
+    } else if (nivelACargar == 2) {
+      nivelActual = 2;
+      iniciarNivel2();
+    }
+    cargaProcesada = true;
+  }
+
+  // 4. Terminar la pantalla de carga tras un tiempo suave para ver la transiciÃ³n
+  if (tiempoTranscurrido >= 1400 && cargaProcesada) {
+    cargandoNivel = false;
+    PantallaDeJuego = 1;
+    // La mÃºsica sigue sonando durante toda la carga y se detiene justo al empezar a jugar
+    if (Audioprueba != null && Audioprueba.isPlaying()) {
+      Audioprueba.stop();
+    }
+    noStroke();
+  }
+
+  hint(ENABLE_DEPTH_TEST);
+}
